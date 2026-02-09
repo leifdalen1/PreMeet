@@ -319,6 +319,7 @@ function HowItWorks() {
 // Demo Section with scroll progress
 function DemoSection() {
   const containerRef = useRef(null);
+  const [progressValue, setProgressValue] = useState(0);
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start end", "end start"]
@@ -326,6 +327,12 @@ function DemoSection() {
   const progress = useTransform(scrollYProgress, [0.2, 0.8], [0, 1]);
   const scale = useTransform(scrollYProgress, [0, 0.5], [0.8, 1]);
   const opacity = useTransform(scrollYProgress, [0, 0.3], [0, 1]);
+  
+  // Convert MotionValue to plain number
+  useEffect(() => {
+    const unsubscribe = progress.on("change", (v) => setProgressValue(v));
+    return () => unsubscribe();
+  }, [progress]);
 
   return (
     <section ref={containerRef} className="relative py-32 px-6">
@@ -366,7 +373,7 @@ function DemoSection() {
           </FadeIn>
 
           <motion.div style={{ scale, opacity }} className="lg:sticky lg:top-32">
-            <MockEmail progress={useSpring(progress, { stiffness: 100, damping: 30 })} />
+            <MockEmail progress={progressValue} />
           </motion.div>
         </div>
       </div>
