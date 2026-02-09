@@ -1,7 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-const REDIRECT_URI = "http://localhost:3000/api/google/callback";
+// Use production URL or fallback to localhost for development
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pre-meet-eta.vercel.app";
+const REDIRECT_URI = `${BASE_URL}/api/google/callback`;
+
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/calendar.events.readonly",
@@ -10,9 +13,7 @@ const SCOPES = [
 export async function GET() {
   const { userId } = await auth();
   if (!userId) {
-    return NextResponse.redirect(
-      new URL("/sign-in", "http://localhost:3000")
-    );
+    return NextResponse.redirect(new URL("/sign-in", BASE_URL));
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;

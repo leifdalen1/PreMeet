@@ -1,17 +1,21 @@
 import { auth } from "@clerk/nextjs/server";
 import { OAuth2Client } from "google-auth-library";
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase-server";
+import { createClient } from "@supabase/supabase-js";
 
-const REDIRECT_URI = "http://localhost:3000/api/google/callback";
+// Use production URL or fallback to localhost for development
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pre-meet-eta.vercel.app";
+const REDIRECT_URI = `${BASE_URL}/api/google/callback`;
 const PROVIDER = "google";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseServer = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
-    return NextResponse.redirect(
-      new URL("/sign-in", "http://localhost:3000")
-    );
+    return NextResponse.redirect(new URL("/sign-in", BASE_URL));
   }
 
   const searchParams = request.nextUrl.searchParams;
@@ -20,13 +24,13 @@ export async function GET(request: NextRequest) {
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/dashboard?error=missing_code", "http://localhost:3000")
+      new URL("/dashboard?error=missing_code", BASE_URL)
     );
   }
 
   if (state !== userId) {
     return NextResponse.redirect(
-      new URL("/dashboard?error=invalid_state", "http://localhost:3000")
+      new URL("/dashboard?error=invalid_state", BASE_URL)
     );
   }
 
@@ -52,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     if (!refreshToken) {
       return NextResponse.redirect(
-        new URL("/dashboard?error=no_refresh_token", "http://localhost:3000")
+        new URL("/dashboard?error=no_refresh_token", BASE_URL)
       );
     }
 
@@ -72,17 +76,17 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error("Supabase upsert failed:", error);
       return NextResponse.redirect(
-        new URL("/dashboard?error=storage_failed", "http://localhost:3000")
+        new URL("/dashboard?error=storage_failed", BASE_URL)
       );
     }
 
     return NextResponse.redirect(
-      new URL("/dashboard?connected=1", "http://localhost:3000")
+      new URL("/dashboard?connected=1", BASE_URL)
     );
   } catch (err) {
     console.error("Google OAuth token exchange failed:", err);
     return NextResponse.redirect(
-      new URL("/dashboard?error=exchange_failed", "http://localhost:3000")
+      new URL("/dashboard?error=exchange_failed", BASE_URL)
     );
   }
 }
