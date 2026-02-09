@@ -9,9 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.37.3",
+    "@supabase/supabase-js": "^2.95.3",
+    "google-auth-library": "^10.5.0",
+    "googleapis": "^171.4.0",
+    "inngest": "^3.51.0",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "resend": "^6.9.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
