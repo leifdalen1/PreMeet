@@ -19,6 +19,16 @@ interface CalendarEvent {
   attendees: Attendee[];
 }
 
+interface Contact {
+  id: string;
+  email: string;
+  name: string | null;
+  company: string | null;
+  title: string | null;
+  last_meeting_date: string;
+  meeting_count: number;
+}
+
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleTimeString("en-US", {
@@ -46,31 +56,447 @@ function formatDate(dateStr: string): string {
   });
 }
 
-interface Contact {
-  id: string;
-  email: string;
-  name: string | null;
-  last_meeting_date: string;
+function formatRelativeDate(dateStr: string): string {
+  if (!dateStr) return "Never";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+  return `${Math.floor(diffDays / 365)} years ago`;
 }
 
-export default function DashboardPage() {
-  const { isLoaded, isSignedIn } = useUser();
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [googleConnected, setGoogleConnected] = useState(false);
+function getInitials(name: string | null, email: string): string {
+  if (name) {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  }
+  return email.slice(0, 2).toUpperCase();
+}
+
+function getAvatarColor(email: string): string {
+  const colors = [
+    "from-red-500 to-orange-500",
+    "from-orange-500 to-yellow-500",
+    "from-yellow-500 to-green-500",
+    "from-green-500 to-teal-500",
+    "from-teal-500 to-blue-500",
+    "from-blue-500 to-indigo-500",
+    "from-indigo-500 to-purple-500",
+    "from-purple-500 to-pink-500",
+    "from-pink-500 to-rose-500",
+  ];
+  
+  const index = email.charCodeAt(0) % colors.length;
+  return colors[index];
+}
+
+// Briefings Tab Component
+function BriefingsTab({ 
+  events, 
+  loading, 
+  error, 
+  googleConnected,
+  onSendTest 
+}: { 
+  events: CalendarEvent[]; 
+  loading: boolean; 
+  error: string | null;
+  googleConnected: boolean;
+  onSendTest: () => void;
+}) {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+
+  async function handleSendTest() {
+    setSendingEmail(true);
+    setEmailSent(false);
+    await onSendTest();
+    setSendingEmail(false);
+    setEmailSent(true);
+    setTimeout(() => setEmailSent(false), 3000);
+  }
+
+  if (!googleConnected) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="rounded-full bg-slate-800/50 p-6">
+          <svg className="h-12 w-12 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+          </svg>
+        </div>
+        <h3 className="mt-6 text-xl font-semibold text-white">Connect Your Calendar</h3>
+        <p className="mt-2 text-slate-400">Link your Google Calendar to start receiving briefings</p>
+        <a
+          href="/api/google"
+          className="mt-6 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-8 py-3 text-base font-medium text-white transition-colors hover:bg-indigo-500"
+        >
+          Connect Google Calendar
+        </a>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-slate-400">Loading meetings...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-red-400">{error}</div>
+      </div>
+    );
+  }
+
+  if (events.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="rounded-full bg-slate-800/50 p-6">
+          <svg className="h-12 w-12 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V19.5a2.25 2.25 0 002.25 2.25h.75m0-18H18a2.25 2.25 0 012.25 2.25V19.5a2.25 2.25 0 01-2.25 2.25H6.75a2.25 2.25 0 01-2.25-2.25V6.108c0-1.135.845-2.098 1.976-2.192a48.424 48.424 0 001.123-.08" />
+          </svg>
+        </div>
+        <h3 className="mt-6 text-xl font-semibold text-white">No Upcoming Meetings</h3>
+        <p className="mt-2 text-slate-400">Your calendar is clear for the next 24 hours</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Bar */}
+      <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/30 px-6 py-4">
+        <div className="flex items-center gap-8">
+          <div>
+            <p className="text-2xl font-semibold text-white">{events.length}</p>
+            <p className="text-xs uppercase tracking-wider text-slate-500">Meetings Today</p>
+          </div>
+          <div className="h-8 w-px bg-slate-800" />
+          <div>
+            <p className="text-2xl font-semibold text-white">
+              {events.reduce((acc, e) => acc + e.attendees.length, 0)}
+            </p>
+            <p className="text-xs uppercase tracking-wider text-slate-500">People to Meet</p>
+          </div>
+        </div>
+        {events.length > 0 && (
+          <button
+            onClick={handleSendTest}
+            disabled={sendingEmail}
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600/10 px-4 py-2 text-sm font-medium text-indigo-400 transition-colors hover:bg-indigo-600/20 disabled:opacity-50"
+          >
+            {sendingEmail ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Sending...
+              </>
+            ) : (
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                </svg>
+                Send Test Briefing
+              </>
+            )}
+          </button>
+        )}
+        {emailSent && (
+          <span className="text-sm text-emerald-400">Email sent!</span>
+        )}
+      </div>
+
+      {/* Meetings List */}
+      <div className="space-y-3">
+        {events.map((event) => (
+          <div
+            key={event.id}
+            className="group relative rounded-xl border border-slate-800/60 bg-slate-900/40 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-700 hover:bg-slate-900/60"
+          >
+            <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-indigo-500/80" />
+            
+            <div className="pl-4">
+              <h3 className="text-lg font-semibold text-white tracking-tight">
+                {event.summary}
+              </h3>
+              <p className="mt-1.5 text-sm font-normal text-slate-400">
+                {formatDate(event.start)} · {formatTime(event.start)} –{" "}
+                {formatTime(event.end)}
+              </p>
+
+              <div className="mt-4">
+                {event.attendees.length === 0 ? (
+                  <div className="inline-flex items-center gap-2 rounded-md bg-slate-800/50 px-3 py-1.5">
+                    <svg 
+                      className="h-3.5 w-3.5 text-slate-500" 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                    <span className="text-xs font-light italic tracking-wide text-slate-500">
+                      Solo meeting
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {event.attendees.slice(0, 3).map((attendee, idx) => (
+                      <div 
+                        key={idx} 
+                        className="flex items-center gap-2 text-xs font-light tracking-wide text-slate-400"
+                      >
+                        <svg 
+                          className="h-3 w-3 text-slate-500" 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                        </svg>
+                        <span className="truncate">{attendee.email}</span>
+                      </div>
+                    ))}
+                    {event.attendees.length > 3 && (
+                      <p className="pl-5 text-xs font-light text-slate-500">
+                        +{event.attendees.length - 3} more
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Network Tab Component
+function NetworkTab({ 
+  contacts, 
+  loading, 
+  onImport 
+}: { 
+  contacts: Contact[]; 
+  loading: boolean;
+  onImport: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("recent");
+  const [importing, setImporting] = useState(false);
+
+  const companies = [...new Set(contacts.map(c => c.company).filter(Boolean))].sort();
   
-  // Contacts state
-  const [contactsCount, setContactsCount] = useState(0);
-  const [recentContacts, setRecentContacts] = useState<Contact[]>([]);
+  const filteredContacts = contacts
+    .filter(c => 
+      search === "" || 
+      c.name?.toLowerCase().includes(search.toLowerCase()) ||
+      c.email.toLowerCase().includes(search.toLowerCase()) ||
+      c.company?.toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => {
+      switch (filter) {
+        case "recent":
+          return new Date(b.last_meeting_date).getTime() - new Date(a.last_meeting_date).getTime();
+        case "company":
+          return (a.company || "").localeCompare(b.company || "");
+        case "alphabetical":
+          return (a.name || a.email).localeCompare(b.name || b.email);
+        default:
+          return 0;
+      }
+    });
+
+  async function handleImport() {
+    setImporting(true);
+    await onImport();
+    setImporting(false);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-slate-400">Loading your network...</div>
+      </div>
+    );
+  }
+
+  if (contacts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="rounded-full bg-slate-800/50 p-6">
+          <svg className="h-12 w-12 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+        </div>
+        <h3 className="mt-6 text-xl font-semibold text-white">Build Your Network</h3>
+        <p className="mt-2 text-slate-400">Import contacts from your calendar history</p>
+        <button
+          onClick={handleImport}
+          disabled={importing}
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-8 py-3 text-base font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
+        >
+          {importing ? (
+            <>
+              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Importing...
+            </>
+          ) : (
+            "Import Contacts"
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Bar */}
+      <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/30 px-6 py-4">
+        <div className="flex items-center gap-8">
+          <div>
+            <p className="text-2xl font-semibold text-white">{contacts.length}</p>
+            <p className="text-xs uppercase tracking-wider text-slate-500">Contacts</p>
+          </div>
+          <div className="h-8 w-px bg-slate-800" />
+          <div>
+            <p className="text-2xl font-semibold text-white">{companies.length}</p>
+            <p className="text-xs uppercase tracking-wider text-slate-500">Companies</p>
+          </div>
+        </div>
+        <button
+          onClick={handleImport}
+          disabled={importing}
+          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600/10 px-4 py-2 text-sm font-medium text-indigo-400 transition-colors hover:bg-indigo-600/20 disabled:opacity-50"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.07M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+          {importing ? "Syncing..." : "Sync"}
+        </button>
+      </div>
+
+      {/* Search & Filters */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="relative flex-1 max-w-md">
+          <svg 
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search contacts..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          {[
+            { value: "recent", label: "Recent" },
+            { value: "company", label: "Company" },
+            { value: "alphabetical", label: "A-Z" },
+          ].map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                filter === f.value
+                  ? "bg-indigo-600 text-white"
+                  : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Contacts Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {filteredContacts.map((contact) => (
+          <div
+            key={contact.id}
+            className="group relative rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-slate-700 hover:bg-slate-900/60"
+          >
+            <div className="flex items-start gap-4">
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${getAvatarColor(contact.email)} text-sm font-medium text-white`}>
+                {getInitials(contact.name, contact.email)}
+              </div>
+              
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate font-medium text-white">
+                  {contact.name || contact.email.split("@")[0]}
+                </h3>
+                <p className="truncate text-sm text-slate-500">{contact.email}</p>
+                
+                {contact.company && (
+                  <p className="mt-1 truncate text-xs text-indigo-400">
+                    {contact.company}
+                  </p>
+                )}
+                
+                {contact.title && (
+                  <p className="truncate text-xs text-slate-500">{contact.title}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between border-t border-slate-800/50 pt-4">
+              <span className="text-xs text-slate-500">
+                Last met {formatRelativeDate(contact.last_meeting_date)}
+              </span>
+              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
+                {contact.meeting_count} meetings
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Main Dashboard Page
+export default function DashboardPage() {
+  const { isLoaded, isSignedIn } = useUser();
+  const [activeTab, setActiveTab] = useState<"briefings" | "network">("briefings");
   
-  // Feedback state
-  const [feedbackRating, setFeedbackRating] = useState<"thumbs_up" | "thumbs_down" | null>(null);
-  const [feedbackMessage, setFeedbackMessage] = useState("");
-  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
-  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  // Data states
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(true);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -79,50 +505,50 @@ export default function DashboardPage() {
       return;
     }
 
-    async function fetchEvents() {
-      try {
-        const response = await fetch("/api/calendar/events");
-        if (!response.ok) {
-          const data = await response.json();
-          if (response.status === 400) {
-            setGoogleConnected(false);
-            setLoading(false);
-            return;
-          }
-          throw new Error(data.error || "Failed to fetch events");
-        }
-        const data = await response.json();
-        setEvents(data.events || []);
-        setGoogleConnected(true);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    async function fetchContacts() {
-      try {
-        const response = await fetch("/api/contacts");
-        if (response.ok) {
-          const data = await response.json();
-          setContactsCount(data.stats?.total || 0);
-          setRecentContacts(data.stats?.recent?.slice(0, 5) || []);
-        }
-      } catch (err) {
-        console.error("Error fetching contacts:", err);
-      }
-    }
-
     fetchEvents();
     fetchContacts();
   }, [isLoaded, isSignedIn]);
 
+  async function fetchEvents() {
+    try {
+      setEventsLoading(true);
+      const response = await fetch("/api/calendar/events");
+      if (!response.ok) {
+        const data = await response.json();
+        if (response.status === 400) {
+          setGoogleConnected(false);
+          setEventsLoading(false);
+          return;
+        }
+        throw new Error(data.error || "Failed to fetch events");
+      }
+      const data = await response.json();
+      setEvents(data.events || []);
+      setGoogleConnected(true);
+    } catch (err) {
+      setEventsError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setEventsLoading(false);
+    }
+  }
+
+  async function fetchContacts() {
+    try {
+      setContactsLoading(true);
+      const response = await fetch("/api/contacts");
+      if (response.ok) {
+        const data = await response.json();
+        setContacts(data.contacts || []);
+      }
+    } catch (err) {
+      console.error("Error fetching contacts:", err);
+    } finally {
+      setContactsLoading(false);
+    }
+  }
+
   async function handleSendTestBriefing() {
     if (events.length === 0) return;
-    
-    setSendingEmail(true);
-    setEmailSent(false);
     
     try {
       const firstEvent = events[0];
@@ -135,40 +561,19 @@ export default function DashboardPage() {
       if (!response.ok) {
         throw new Error("Failed to send email");
       }
-      
-      setEmailSent(true);
-      setTimeout(() => setEmailSent(false), 3000);
     } catch (err) {
-      setError("Failed to send test email");
-    } finally {
-      setSendingEmail(false);
+      console.error("Error sending test briefing:", err);
     }
   }
 
-  async function handleSubmitFeedback() {
-    if (!feedbackRating) return;
-    
-    setSubmittingFeedback(true);
-    
+  async function handleImportContacts() {
     try {
-      const response = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rating: feedbackRating,
-          message: feedbackMessage || null,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error("Failed to submit feedback");
+      const response = await fetch("/api/contacts/import", { method: "POST" });
+      if (response.ok) {
+        fetchContacts();
       }
-      
-      setFeedbackSubmitted(true);
     } catch (err) {
-      console.error("Feedback error:", err);
-    } finally {
-      setSubmittingFeedback(false);
+      console.error("Error importing contacts:", err);
     }
   }
 
@@ -182,266 +587,87 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
+      {/* Navbar */}
       <nav className="border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="text-lg font-semibold tracking-tight text-white hover:opacity-80 transition-opacity">
             PreMeet
           </Link>
-          {googleConnected && (
-            <Link
-              href="/contacts"
-              className="text-sm font-medium text-slate-400 transition-colors hover:text-white"
-            >
-              Your Network
-            </Link>
-          )}
+          <Link
+            href="/"
+            className="text-sm font-medium text-slate-400 transition-colors hover:text-white"
+          >
+            Back to Home
+          </Link>
         </div>
       </nav>
 
-      <main className="mx-auto max-w-2xl px-6 py-16">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Your Meetings
-            </h1>
-            <p className="mt-4 text-lg text-slate-400">
-              Next 24 hours of scheduled events
-            </p>
-          </div>
-          
-          {googleConnected && events.length > 0 && (
-            <div className="flex flex-col items-end gap-2">
-              <button
-                onClick={handleSendTestBriefing}
-                disabled={sendingEmail}
-                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {sendingEmail ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                    </svg>
-                    Send Test Briefing
-                  </>
-                )}
-              </button>
-              {emailSent && (
-                <span className="text-sm text-emerald-400 animate-in fade-in slide-in-from-top-1">
-                  Email sent!
-                </span>
-              )}
-            </div>
-          )}
+      <main className="mx-auto max-w-4xl px-6 py-8">
+        {/* Page Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="mt-1 text-slate-400">Manage your briefings and network</p>
         </div>
 
-        {!googleConnected ? (
-          <div className="mt-10">
-            <a
-              href="/api/google"
-              className="inline-flex items-center justify-center rounded-lg bg-slate-800 px-8 py-4 text-base font-medium text-white ring-1 ring-slate-700 transition-colors hover:bg-slate-700 hover:ring-indigo-500/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-950"
-            >
-              Connect Google Calendar
-            </a>
-          </div>
-        ) : loading ? (
-          <div className="mt-10 text-slate-400">Loading events...</div>
-        ) : error ? (
-          <div className="mt-10 text-red-400">{error}</div>
-        ) : events.length === 0 ? (
-          <div className="mt-10 rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
-            <p className="text-slate-400">No upcoming meetings</p>
-          </div>
+        {/* Big Equal-Weight Tabs */}
+        <div className="mb-8 grid grid-cols-2 gap-1 rounded-xl bg-slate-900/50 p-1">
+          <button
+            onClick={() => setActiveTab("briefings")}
+            className={`relative flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-medium transition-all ${
+              activeTab === "briefings"
+                ? "bg-indigo-600 text-white shadow-lg"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+            Briefings
+            {events.length > 0 && (
+              <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${
+                activeTab === "briefings" ? "bg-white/20" : "bg-slate-800"
+              }`}>
+                {events.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("network")}
+            className={`relative flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-medium transition-all ${
+              activeTab === "network"
+                ? "bg-indigo-600 text-white shadow-lg"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+            </svg>
+            Your Network
+            {contacts.length > 0 && (
+              <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${
+                activeTab === "network" ? "bg-white/20" : "bg-slate-800"
+              }`}>
+                {contacts.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === "briefings" ? (
+          <BriefingsTab
+            events={events}
+            loading={eventsLoading}
+            error={eventsError}
+            googleConnected={googleConnected}
+            onSendTest={handleSendTestBriefing}
+          />
         ) : (
-          <div className="mt-10 space-y-3">
-            {events.map((event) => (
-              <div
-                key={event.id}
-                className="group relative rounded-lg border border-slate-800/60 bg-slate-900/40 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-700 hover:bg-slate-900/60 hover:shadow-lg hover:shadow-black/20"
-              >
-                {/* Left accent border */}
-                <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-indigo-500/80" />
-                
-                <div className="pl-4">
-                  {/* Title */}
-                  <h3 className="text-lg font-semibold text-white tracking-tight">
-                    {event.summary}
-                  </h3>
-                  
-                  {/* Time */}
-                  <p className="mt-1.5 text-sm font-normal text-slate-400">
-                    {formatDate(event.start)} · {formatTime(event.start)} –{" "}
-                    {formatTime(event.end)}
-                  </p>
-
-                  {/* Attendees */}
-                  <div className="mt-4">
-                    {event.attendees.length === 0 ? (
-                      <div className="inline-flex items-center gap-2 rounded-md bg-slate-800/50 px-3 py-1.5">
-                        <svg 
-                          className="h-3.5 w-3.5 text-slate-500" 
-                          fill="none" 
-                          viewBox="0 0 24 24" 
-                          stroke="currentColor"
-                          strokeWidth={1.5}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                        </svg>
-                        <span className="text-xs font-light italic tracking-wide text-slate-500">
-                          Solo meeting
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {event.attendees.slice(0, 3).map((attendee, idx) => (
-                          <div 
-                            key={idx} 
-                            className="flex items-center gap-2 text-xs font-light tracking-wide text-slate-400"
-                          >
-                            <svg 
-                              className="h-3 w-3 text-slate-500" 
-                              fill="none" 
-                              viewBox="0 0 24 24" 
-                              stroke="currentColor"
-                              strokeWidth={1.5}
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                            </svg>
-                            <span className="truncate">{attendee.email}</span>
-                          </div>
-                        ))}
-                        {event.attendees.length > 3 && (
-                          <p className="pl-5 text-xs font-light text-slate-500">
-                            +{event.attendees.length - 3} more
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Feedback Banner - only show when connected and has events */}
-        {googleConnected && !loading && events.length > 0 && !feedbackSubmitted && (
-          <div className="mt-12 rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-            {!feedbackRating ? (
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-300">How was your first briefing?</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setFeedbackRating("thumbs_up")}
-                    className="rounded-lg bg-slate-800 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-emerald-400"
-                    title="Good"
-                  >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 10.203 4.167 9.75 5 9.75h1.053c.472 0 .745.556.5.96a8.958 8.958 0 00-1.302 4.665c0 1.194.232 2.333.654 3.375z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setFeedbackRating("thumbs_down")}
-                    className="rounded-lg bg-slate-800 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400"
-                    title="Needs improvement"
-                  >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.498 15.25H4.372c-1.026 0-1.945-.694-2.054-1.715a12.137 12.137 0 01-.068-1.285c0-2.848.992-5.464 2.649-7.521C5.287 4.247 5.886 4 6.504 4h4.016a6 6 0 011.423.23l3.114 1.04a4.5 4.5 0 001.423.23h1.294M7.498 15.25c.618 0 .991.272 1.067.82a9.04 9.04 0 010 2.06c-.076.548-.449.82-1.067.82H4.596M7.498 15.25H4.372c-1.026 0-1.945-.694-2.054-1.715a12.137 12.137 0 01-.068-1.285c0-2.848.992-5.464 2.649-7.521C5.287 4.247 5.886 4 6.504 4h4.016a6 6 0 011.423.23l3.114 1.04a4.5 4.5 0 001.423.23h1.294M14.25 9h2.25M5.904 18.75l.729-.571c.928-.727 2.11-1.107 3.316-1.044 1.135.06 2.27.147 3.396.26M14.25 18.75a3 3 0 01-4.35-2.334c-.14-.39-.21-.806-.21-1.224" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-slate-300">
-                  {feedbackRating === "thumbs_down" 
-                    ? "What would make this better?" 
-                    : "Thanks! Any additional feedback?"}
-                </p>
-                <textarea
-                  value={feedbackMessage}
-                  onChange={(e) => setFeedbackMessage(e.target.value)}
-                  placeholder="Tell us what you think..."
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  rows={3}
-                />
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleSubmitFeedback}
-                    disabled={submittingFeedback}
-                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
-                  >
-                    {submittingFeedback ? "Submitting..." : "Submit"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setFeedbackRating(null);
-                      setFeedbackMessage("");
-                    }}
-                    className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-400 transition-colors hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Thank you message after feedback submitted */}
-        {feedbackSubmitted && (
-          <div className="mt-12 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-6 text-center">
-            <p className="text-emerald-400">Thanks for your feedback! 🙏</p>
-          </div>
-        )}
-
-        {/* Network Stats Card */}
-        {googleConnected && contactsCount > 0 && (
-          <div className="mt-12 rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-white">Your Network</h3>
-                <p className="text-sm text-slate-400">{contactsCount} contacts imported</p>
-              </div>
-              <Link
-                href="/contacts"
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500"
-              >
-                View All
-              </Link>
-            </div>
-            
-            {/* Recent contacts preview */}
-            {recentContacts.length > 0 && (
-              <div className="mt-4">
-                <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Last {recentContacts.length} people you met
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {recentContacts.map((contact) => (
-                    <div
-                      key={contact.id}
-                      className="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-800/50 px-3 py-1.5"
-                    >
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-[10px] font-medium text-white">
-                        {(contact.name || contact.email).slice(0, 2).toUpperCase()}
-                      </div>
-                      <span className="text-xs text-slate-300">
-                        {contact.name || contact.email.split("@")[0]}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <NetworkTab
+            contacts={contacts}
+            loading={contactsLoading}
+            onImport={handleImportContacts}
+          />
         )}
       </main>
     </div>
