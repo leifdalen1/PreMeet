@@ -192,6 +192,22 @@ function Hero() {
     <section className="relative flex min-h-screen flex-col items-center justify-center px-6">
       <AnimatedBackground />
       
+      {/* Beta Badge */}
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5, delay: 1 }}
+        className="absolute right-6 top-24 z-20"
+      >
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-400 ring-1 ring-inset ring-indigo-500/20">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75"></span>
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-indigo-500"></span>
+          </span>
+          Beta
+        </span>
+      </motion.div>
+      
       <div className="relative z-10 mx-auto max-w-4xl text-center">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -220,15 +236,18 @@ function Hero() {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: isComplete ? 1 : 0, scale: isComplete ? 1 : 0.9 }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="mt-10"
+          className="mt-10 flex flex-col items-center gap-3"
         >
           <Link
             href="/sign-up"
             className="group relative inline-flex items-center justify-center overflow-hidden rounded-lg bg-indigo-600 px-10 py-4 text-lg font-medium text-white transition-all duration-300 hover:bg-indigo-500 hover:shadow-[0_0_40px_-10px_rgba(99,102,241,0.5)] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-950"
           >
-            <span className="relative z-10">Connect Google Calendar</span>
+            <span className="relative z-10">Get Free Beta Access</span>
             <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
           </Link>
+          <p className="text-sm text-slate-500">
+            Free during beta · No credit card required
+          </p>
         </motion.div>
       </div>
 
@@ -473,16 +492,19 @@ function CTA() {
             Ready to walk in prepared?
           </h2>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-400">
-            Join professionals who never miss a beat. Connect your calendar and get your first briefing.
+            Join the beta and be among the first to experience meeting intelligence.
           </p>
-          <div className="mt-10">
+          <div className="mt-10 flex flex-col items-center gap-3">
             <Link
               href="/sign-up"
               className="group relative inline-flex items-center justify-center overflow-hidden rounded-lg bg-indigo-600 px-10 py-4 text-lg font-medium text-white transition-all duration-300 hover:bg-indigo-500 hover:shadow-[0_0_40px_-10px_rgba(99,102,241,0.5)]"
             >
-              <span className="relative z-10">Get Started Free</span>
+              <span className="relative z-10">Get Free Beta Access</span>
               <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
             </Link>
+            <p className="text-sm text-slate-500">
+              Free during beta · No credit card required
+            </p>
           </div>
         </FadeIn>
       </div>
@@ -512,9 +534,14 @@ export default function Home() {
     <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-          <span className="text-lg font-semibold tracking-tight text-white">
-            PreMeet
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-lg font-semibold tracking-tight text-white">
+              PreMeet
+            </span>
+            <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-400 ring-1 ring-inset ring-indigo-500/20">
+              BETA
+            </span>
+          </div>
           <Link
             href="/sign-in"
             className="text-sm font-medium text-slate-400 transition-colors hover:text-white"
