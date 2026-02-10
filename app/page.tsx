@@ -534,14 +534,14 @@ export default function Home() {
     <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3">
             <span className="text-lg font-semibold tracking-tight text-white">
               PreMeet
             </span>
             <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-400 ring-1 ring-inset ring-indigo-500/20">
               BETA
             </span>
-          </div>
+          </Link>
           <Link
             href="/sign-in"
             className="text-sm font-medium text-slate-400 transition-colors hover:text-white"
