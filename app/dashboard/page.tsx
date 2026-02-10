@@ -46,6 +46,13 @@ function formatDate(dateStr: string): string {
   });
 }
 
+interface Contact {
+  id: string;
+  email: string;
+  name: string | null;
+  last_meeting_date: string;
+}
+
 export default function DashboardPage() {
   const { isLoaded, isSignedIn } = useUser();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -54,6 +61,10 @@ export default function DashboardPage() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  
+  // Contacts state
+  const [contactsCount, setContactsCount] = useState(0);
+  const [recentContacts, setRecentContacts] = useState<Contact[]>([]);
   
   // Feedback state
   const [feedbackRating, setFeedbackRating] = useState<"thumbs_up" | "thumbs_down" | null>(null);
@@ -90,7 +101,21 @@ export default function DashboardPage() {
       }
     }
 
+    async function fetchContacts() {
+      try {
+        const response = await fetch("/api/contacts");
+        if (response.ok) {
+          const data = await response.json();
+          setContactsCount(data.stats?.total || 0);
+          setRecentContacts(data.stats?.recent?.slice(0, 5) || []);
+        }
+      } catch (err) {
+        console.error("Error fetching contacts:", err);
+      }
+    }
+
     fetchEvents();
+    fetchContacts();
   }, [isLoaded, isSignedIn]);
 
   async function handleSendTestBriefing() {
@@ -158,10 +183,18 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
       <nav className="border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-6xl items-center px-6">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="text-lg font-semibold tracking-tight text-white hover:opacity-80 transition-opacity">
             PreMeet
           </Link>
+          {googleConnected && (
+            <Link
+              href="/contacts"
+              className="text-sm font-medium text-slate-400 transition-colors hover:text-white"
+            >
+              Your Network
+            </Link>
+          )}
         </div>
       </nav>
 
@@ -366,6 +399,48 @@ export default function DashboardPage() {
         {feedbackSubmitted && (
           <div className="mt-12 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-6 text-center">
             <p className="text-emerald-400">Thanks for your feedback! 🙏</p>
+          </div>
+        )}
+
+        {/* Network Stats Card */}
+        {googleConnected && contactsCount > 0 && (
+          <div className="mt-12 rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Your Network</h3>
+                <p className="text-sm text-slate-400">{contactsCount} contacts imported</p>
+              </div>
+              <Link
+                href="/contacts"
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500"
+              >
+                View All
+              </Link>
+            </div>
+            
+            {/* Recent contacts preview */}
+            {recentContacts.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Last {recentContacts.length} people you met
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {recentContacts.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-800/50 px-3 py-1.5"
+                    >
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-[10px] font-medium text-white">
+                        {(contact.name || contact.email).slice(0, 2).toUpperCase()}
+                      </div>
+                      <span className="text-xs text-slate-300">
+                        {contact.name || contact.email.split("@")[0]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
