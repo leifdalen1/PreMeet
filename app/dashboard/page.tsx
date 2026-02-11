@@ -25,6 +25,8 @@ interface Contact {
   name: string | null;
   company: string | null;
   title: string | null;
+  linkedin_url: string | null;
+  enriched: boolean;
   last_meeting_date: string;
   meeting_count: number;
 }
@@ -61,7 +63,7 @@ function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  
+
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays} days ago`;
@@ -94,21 +96,21 @@ function getAvatarColor(email: string): string {
     "from-purple-500 to-pink-500",
     "from-pink-500 to-rose-500",
   ];
-  
+
   const index = email.charCodeAt(0) % colors.length;
   return colors[index];
 }
 
 // Briefings Tab Component
-function BriefingsTab({ 
-  events, 
-  loading, 
-  error, 
+function BriefingsTab({
+  events,
+  loading,
+  error,
   googleConnected,
-  onSendTest 
-}: { 
-  events: CalendarEvent[]; 
-  loading: boolean; 
+  onSendTest
+}: {
+  events: CalendarEvent[];
+  loading: boolean;
   error: string | null;
   googleConnected: boolean;
   onSendTest: () => void;
@@ -229,7 +231,7 @@ function BriefingsTab({
             className="group relative rounded-xl border border-slate-800/60 bg-slate-900/40 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-700 hover:bg-slate-900/60"
           >
             <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-indigo-500/80" />
-            
+
             <div className="pl-4">
               <h3 className="text-lg font-semibold text-white tracking-tight">
                 {event.summary}
@@ -242,10 +244,10 @@ function BriefingsTab({
               <div className="mt-4">
                 {event.attendees.length === 0 ? (
                   <div className="inline-flex items-center gap-2 rounded-md bg-slate-800/50 px-3 py-1.5">
-                    <svg 
-                      className="h-3.5 w-3.5 text-slate-500" 
-                      fill="none" 
-                      viewBox="0 0 24 24" 
+                    <svg
+                      className="h-3.5 w-3.5 text-slate-500"
+                      fill="none"
+                      viewBox="0 0 24 24"
                       stroke="currentColor"
                       strokeWidth={1.5}
                     >
@@ -258,14 +260,14 @@ function BriefingsTab({
                 ) : (
                   <div className="space-y-1.5">
                     {event.attendees.slice(0, 3).map((attendee, idx) => (
-                      <div 
-                        key={idx} 
+                      <div
+                        key={idx}
                         className="flex items-center gap-2 text-xs font-light tracking-wide text-slate-400"
                       >
-                        <svg 
-                          className="h-3 w-3 text-slate-500" 
-                          fill="none" 
-                          viewBox="0 0 24 24" 
+                        <svg
+                          className="h-3 w-3 text-slate-500"
+                          fill="none"
+                          viewBox="0 0 24 24"
                           stroke="currentColor"
                           strokeWidth={1.5}
                         >
@@ -290,25 +292,38 @@ function BriefingsTab({
   );
 }
 
+// LinkedIn SVG icon component
+function LinkedInIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+    </svg>
+  );
+}
+
 // Network Tab Component
-function NetworkTab({ 
-  contacts, 
-  loading, 
-  onImport 
-}: { 
-  contacts: Contact[]; 
+function NetworkTab({
+  contacts,
+  loading,
+  onImport,
+  onEnrich,
+  enrichingIds,
+}: {
+  contacts: Contact[];
   loading: boolean;
   onImport: () => void;
+  onEnrich: (contactId: string) => void;
+  enrichingIds: Set<string>;
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("recent");
   const [importing, setImporting] = useState(false);
 
   const companies = [...new Set(contacts.map(c => c.company).filter(Boolean))].sort();
-  
+
   const filteredContacts = contacts
-    .filter(c => 
-      search === "" || 
+    .filter(c =>
+      search === "" ||
       c.name?.toLowerCase().includes(search.toLowerCase()) ||
       c.email.toLowerCase().includes(search.toLowerCase()) ||
       c.company?.toLowerCase().includes(search.toLowerCase())
@@ -385,6 +400,14 @@ function NetworkTab({
             <p className="text-2xl font-semibold text-white">{companies.length}</p>
             <p className="text-xs uppercase tracking-wider text-slate-500">Companies</p>
           </div>
+          <div className="h-8 w-px bg-slate-800" />
+          <div>
+            <p className="text-2xl font-semibold text-violet-400">
+              {contacts.filter(c => c.enriched).length}
+              <span className="text-sm font-normal text-slate-500">/{contacts.length}</span>
+            </p>
+            <p className="text-xs uppercase tracking-wider text-slate-500">Enriched</p>
+          </div>
         </div>
         <button
           onClick={handleImport}
@@ -401,10 +424,10 @@ function NetworkTab({
       {/* Search & Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1 max-w-md">
-          <svg 
-            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" 
-            fill="none" 
-            viewBox="0 0 24 24" 
+          <svg
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+            fill="none"
+            viewBox="0 0 24 24"
             stroke="currentColor"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -427,11 +450,10 @@ function NetworkTab({
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                filter === f.value
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${filter === f.value
                   ? "bg-indigo-600 text-white"
                   : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
-              }`}
+                }`}
             >
               {f.label}
             </button>
@@ -441,44 +463,82 @@ function NetworkTab({
 
       {/* Contacts Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredContacts.map((contact) => (
-          <div
-            key={contact.id}
-            className="group relative rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-slate-700 hover:bg-slate-900/60"
-          >
-            <div className="flex items-start gap-4">
-              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${getAvatarColor(contact.email)} text-sm font-medium text-white`}>
-                {getInitials(contact.name, contact.email)}
-              </div>
-              
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate font-medium text-white">
-                  {contact.name || contact.email.split("@")[0]}
-                </h3>
-                <p className="truncate text-sm text-slate-500">{contact.email}</p>
-                
-                {contact.company && (
-                  <p className="mt-1 truncate text-xs text-indigo-400">
-                    {contact.company}
-                  </p>
-                )}
-                
-                {contact.title && (
-                  <p className="truncate text-xs text-slate-500">{contact.title}</p>
-                )}
-              </div>
-            </div>
+        {filteredContacts.map((contact) => {
+          const isEnriching = enrichingIds.has(contact.id);
+          return (
+            <div
+              key={contact.id}
+              className={`group relative rounded-xl border p-5 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${contact.enriched
+                  ? "border-violet-500/20 bg-gradient-to-b from-slate-900/80 to-slate-900/40 hover:border-violet-500/40"
+                  : "border-slate-800 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/60"
+                }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${getAvatarColor(contact.email)} text-sm font-medium text-white ${contact.enriched ? "ring-2 ring-violet-500/30" : ""}`}>
+                  {getInitials(contact.name, contact.email)}
+                </div>
 
-            <div className="mt-4 flex items-center justify-between border-t border-slate-800/50 pt-4">
-              <span className="text-xs text-slate-500">
-                Last met {formatRelativeDate(contact.last_meeting_date)}
-              </span>
-              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
-                {contact.meeting_count} meetings
-              </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate font-medium text-white">
+                    {contact.name || contact.email.split("@")[0]}
+                  </h3>
+                  <p className="truncate text-sm text-slate-500">{contact.email}</p>
+
+                  {contact.title && (
+                    <p className="mt-1 truncate text-xs font-medium text-slate-300">{contact.title}</p>
+                  )}
+
+                  {contact.company && (
+                    <p className="truncate text-xs text-indigo-400">
+                      {contact.company}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between border-t border-slate-800/50 pt-4">
+                <span className="text-xs text-slate-500">
+                  Last met {formatRelativeDate(contact.last_meeting_date)}
+                </span>
+                <div className="flex items-center gap-2">
+                  {contact.linkedin_url && (
+                    <a
+                      href={contact.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-md p-1 text-blue-400 transition-colors hover:bg-blue-500/10 hover:text-blue-300"
+                    >
+                      <LinkedInIcon className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                  {!contact.enriched ? (
+                    <button
+                      onClick={() => onEnrich(contact.id)}
+                      disabled={isEnriching}
+                      className="inline-flex items-center gap-1 rounded-md bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-400 transition-all hover:bg-violet-500/20 disabled:opacity-50"
+                    >
+                      {isEnriching ? (
+                        <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                        </svg>
+                      )}
+                      Enrich
+                    </button>
+                  ) : (
+                    <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
+                      {contact.meeting_count} meetings
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -488,15 +548,16 @@ function NetworkTab({
 export default function DashboardPage() {
   const { isLoaded, isSignedIn } = useUser();
   const [activeTab, setActiveTab] = useState<"briefings" | "network">("briefings");
-  
+
   // Data states
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
-  
+
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(true);
+  const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -549,7 +610,7 @@ export default function DashboardPage() {
 
   async function handleSendTestBriefing() {
     if (events.length === 0) return;
-    
+
     try {
       const firstEvent = events[0];
       const response = await fetch("/api/send-briefing", {
@@ -557,7 +618,7 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meeting: firstEvent }),
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to send email");
       }
@@ -574,6 +635,32 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error("Error importing contacts:", err);
+    }
+  }
+
+  async function handleEnrichContact(contactId: string) {
+    setEnrichingIds((prev) => new Set(prev).add(contactId));
+    try {
+      const response = await fetch("/api/contacts/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setContacts((prev) =>
+          prev.map((c) => (c.id === contactId ? data.contact : c))
+        );
+      }
+    } catch (err) {
+      console.error("Error enriching contact:", err);
+    } finally {
+      setEnrichingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(contactId);
+        return next;
+      });
     }
   }
 
@@ -613,40 +700,36 @@ export default function DashboardPage() {
         <div className="mb-8 grid grid-cols-2 gap-1 rounded-xl bg-slate-900/50 p-1">
           <button
             onClick={() => setActiveTab("briefings")}
-            className={`relative flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-medium transition-all ${
-              activeTab === "briefings"
+            className={`relative flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-medium transition-all ${activeTab === "briefings"
                 ? "bg-indigo-600 text-white shadow-lg"
                 : "text-slate-400 hover:text-white"
-            }`}
+              }`}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
             </svg>
             Briefings
             {events.length > 0 && (
-              <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${
-                activeTab === "briefings" ? "bg-white/20" : "bg-slate-800"
-              }`}>
+              <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${activeTab === "briefings" ? "bg-white/20" : "bg-slate-800"
+                }`}>
                 {events.length}
               </span>
             )}
           </button>
           <button
             onClick={() => setActiveTab("network")}
-            className={`relative flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-medium transition-all ${
-              activeTab === "network"
+            className={`relative flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-medium transition-all ${activeTab === "network"
                 ? "bg-indigo-600 text-white shadow-lg"
                 : "text-slate-400 hover:text-white"
-            }`}
+              }`}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
             </svg>
             Your Network
             {contacts.length > 0 && (
-              <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${
-                activeTab === "network" ? "bg-white/20" : "bg-slate-800"
-              }`}>
+              <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${activeTab === "network" ? "bg-white/20" : "bg-slate-800"
+                }`}>
                 {contacts.length}
               </span>
             )}
@@ -667,6 +750,8 @@ export default function DashboardPage() {
             contacts={contacts}
             loading={contactsLoading}
             onImport={handleImportContacts}
+            onEnrich={handleEnrichContact}
+            enrichingIds={enrichingIds}
           />
         )}
       </main>

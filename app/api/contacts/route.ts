@@ -9,7 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 export async function GET(request: Request) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -83,11 +83,19 @@ export async function GET(request: Request) {
       .order("last_meeting_date", { ascending: false })
       .limit(5);
 
+    // Count enriched contacts
+    const { count: enrichedCount } = await supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("enriched", true);
+
     return NextResponse.json({
       contacts: contacts || [],
       companies,
       stats: {
         total: totalContacts || 0,
+        enriched: enrichedCount || 0,
         recent: recentContacts || [],
       },
     });

@@ -8,6 +8,8 @@ create table if not exists public.contacts (
   name text,
   company text,
   title text,
+  linkedin_url text,
+  enriched boolean default false,
   last_meeting_date timestamptz,
   meeting_count integer default 1,
   created_at timestamptz default now(),
@@ -31,3 +33,9 @@ CREATE INDEX IF NOT EXISTS idx_contacts_last_meeting ON public.contacts(last_mee
 
 -- Optional: enable RLS and allow service role full access (default).
 -- alter table public.contacts enable row level security;
+
+-- ============================================================
+-- Migration: run these if the table already exists
+-- ============================================================
+ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS linkedin_url text;
+ALTER TABLE public.contacts ADD COLUMN IF NOT EXISTS enriched boolean DEFAULT false;
